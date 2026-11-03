@@ -1,0 +1,9 @@
+{
+  "name": "GDACaixa · Guerreiros do Alto",
+  "short_name": "GDACaixa",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6faf5",
+  "theme_color": "#2f6b48",
+  "icons": [{ "src": "/favicon.ico", "sizes": "64x64", "type": "image/x-icon" }]
+}
