@@ -10,33 +10,73 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ClubeRouteImport } from './routes/clube'
+import { Route as DoceriaRouteImport } from './routes/doceria'
+import { Route as MaisRouteImport } from './routes/mais'
+import { Route as VendasRouteImport } from './routes/vendas'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ClubeRoute = ClubeRouteImport.update({
+  id: '/clube',
+  path: '/clube',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DoceriaRoute = DoceriaRouteImport.update({
+  id: '/doceria',
+  path: '/doceria',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MaisRoute = MaisRouteImport.update({
+  id: '/mais',
+  path: '/mais',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VendasRoute = VendasRouteImport.update({
+  id: '/vendas',
+  path: '/vendas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/clube': typeof ClubeRoute
+  '/doceria': typeof DoceriaRoute
+  '/mais': typeof MaisRoute
+  '/vendas': typeof VendasRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/clube': typeof ClubeRoute
+  '/doceria': typeof DoceriaRoute
+  '/mais': typeof MaisRoute
+  '/vendas': typeof VendasRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/clube': typeof ClubeRoute
+  '/doceria': typeof DoceriaRoute
+  '/mais': typeof MaisRoute
+  '/vendas': typeof VendasRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/clube' | '/doceria' | '/mais' | '/vendas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/clube' | '/doceria' | '/mais' | '/vendas'
+  id: '__root__' | '/' | '/clube' | '/doceria' | '/mais' | '/vendas'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ClubeRoute: typeof ClubeRoute
+  DoceriaRoute: typeof DoceriaRoute
+  MaisRoute: typeof MaisRoute
+  VendasRoute: typeof VendasRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +88,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/clube': {
+      id: '/clube'
+      path: '/clube'
+      fullPath: '/clube'
+      preLoaderRoute: typeof ClubeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/doceria': {
+      id: '/doceria'
+      path: '/doceria'
+      fullPath: '/doceria'
+      preLoaderRoute: typeof DoceriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mais': {
+      id: '/mais'
+      path: '/mais'
+      fullPath: '/mais'
+      preLoaderRoute: typeof MaisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vendas': {
+      id: '/vendas'
+      path: '/vendas'
+      fullPath: '/vendas'
+      preLoaderRoute: typeof VendasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ClubeRoute: ClubeRoute,
+  DoceriaRoute: DoceriaRoute,
+  MaisRoute: MaisRoute,
+  VendasRoute: VendasRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
