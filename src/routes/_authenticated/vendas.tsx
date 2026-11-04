@@ -3,7 +3,7 @@ import { AppShell } from "@/components/m3/AppShell";
 import { M3Card, NewEntryFab, TransactionList } from "@/components/m3/parts";
 import { brl, COMMISSION_RATE, commissionBySeller, useTransactions } from "@/lib/finance";
 
-export const Route = createFileRoute("/vendas")({
+export const Route = createFileRoute("/_authenticated/vendas")({
   head: () => ({
     meta: [
       { title: "GDACaixa · Vendas e eventos" },

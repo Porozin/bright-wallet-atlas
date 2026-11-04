@@ -5,7 +5,7 @@ import { ChipGroup, M3Card, Stat, TransactionList } from "@/components/m3/parts"
 import { MonthlyChart } from "@/components/m3/MonthlyChart";
 import { brl, summarize, useTransactions } from "@/lib/finance";
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
       { title: "GDACaixa · Início" },

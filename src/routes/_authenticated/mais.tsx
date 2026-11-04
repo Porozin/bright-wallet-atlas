@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/m3/AppShell";
 import { MODULE_LABEL, useTransactions } from "@/lib/finance";
 
-export const Route = createFileRoute("/mais")({
+export const Route = createFileRoute("/_authenticated/mais")({
   head: () => ({
     meta: [
       { title: "GDACaixa · Mais opções" },
