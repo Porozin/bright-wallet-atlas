@@ -88,8 +88,11 @@ const field = "h-14 w-full rounded-sm border border-outline bg-transparent px-4 
 export function NewEntryFab({ module, withSeller }: { module: Module; withSeller?: boolean }) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("receita");
+  const [saving, setSaving] = useState(false);
+  const canRecord = useCanRecord();
+  if (!canRecord) return null;
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const amount = Number(String(f.get("amount")).replace(",", "."));
@@ -98,14 +101,21 @@ export function NewEntryFab({ module, withSeller }: { module: Module; withSeller
       toast.error("Informe descrição e um valor maior que zero.");
       return;
     }
-    addTransaction({
-      module, kind, amount, description,
-      category: String(f.get("category") || "Geral"),
-      date: String(f.get("date") || new Date().toISOString().slice(0, 10)),
-      seller: withSeller ? String(f.get("seller") || "") || undefined : undefined,
-    });
-    toast.success("Movimentação registrada");
-    setOpen(false);
+    setSaving(true);
+    try {
+      await addTransaction({
+        module, kind, amount, description,
+        category: String(f.get("category") || "Geral"),
+        date: String(f.get("date") || new Date().toISOString().slice(0, 10)),
+        seller: withSeller ? String(f.get("seller") || "") || undefined : undefined,
+      });
+      toast.success("Movimentação registrada");
+      setOpen(false);
+    } catch {
+      toast.error("Não foi possível salvar. Verifique sua permissão.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -132,7 +142,7 @@ export function NewEntryFab({ module, withSeller }: { module: Module; withSeller
             </div>
             <input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className={field} />
             {withSeller && <input name="seller" placeholder="Vendedor(a)" className={field} maxLength={40} />}
-            <button type="submit" className="label-large h-12 w-full rounded-full bg-primary text-primary-foreground">Salvar</button>
+            <button type="submit" disabled={saving} className="label-large h-12 w-full rounded-full bg-primary text-primary-foreground disabled:opacity-60">{saving ? "Salvando…" : "Salvar"}</button>
           </form>
         </DrawerContent>
       </Drawer>
