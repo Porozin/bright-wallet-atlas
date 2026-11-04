@@ -301,3 +301,59 @@ export function useIsAdminOrDiretor() {
   const { data } = useMe();
   return !!data?.roles.some((r) => r === "admin" || r === "diretor");
 }
+// --- 6. Gestão de Usuários (RBAC) ---
+export interface ClubUser {
+  id: string;
+  name: string;
+  avatar_url?: string | null;
+  roles: Role[];
+}
+
+export function useAllUsers() {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ["all_users"],
+    queryFn: async () => {
+      const [{ data: profiles }, { data: roles }] = await Promise.all([
+        supabase.from("profiles").select("id, display_name, avatar_url"),
+        supabase.from("user_roles").select("user_id, role"),
+      ]);
+
+      if (!profiles) return [];
+
+      const rolesByUser = new Map<string, Role[]>();
+      (roles ?? []).forEach((r) => {
+        const list = rolesByUser.get(r.user_id) || [];
+        list.push(r.role as Role);
+        rolesByUser.set(r.user_id, list);
+      });
+
+      return profiles.map((p) => ({
+        id: p.id,
+        name: p.display_name || "Membro",
+        avatar_url: p.avatar_url,
+        roles: rolesByUser.get(p.id) || ["desbravador"],
+      })) as ClubUser[];
+    },
+  });
+}
+
+export async function updateUserRole(userId: string, newRole: Role) {
+  // Remove papéis anteriores e adiciona o novo papel hierárquico
+  await supabase.from("user_roles").delete().eq("user_id", userId);
+  const { error } = await supabase.from("user_roles").insert({
+    user_id: userId,
+    role: newRole,
+  });
+  if (error) throw error;
+}
+
+export function useIsAdmin() {
+  const { data } = useMe();
+  return !!data?.roles.includes("admin");
+}
+
+export function useIsConselheiro() {
+  const { data } = useMe();
+  return !!data?.roles.includes("conselheiro");
+}

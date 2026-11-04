@@ -13,6 +13,8 @@ import {
   Plus,
   CheckCircle2,
   Clock,
+  Users2,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/m3/AppShell";
@@ -20,12 +22,17 @@ import { MetricCard } from "@/components/m3/parts";
 import { MODULE_LABEL, brl, summarize } from "@/lib/finance";
 import {
   ROLE_LABEL,
+  Role,
   useMe,
   useTransactions,
   useDividas,
   addDivida,
   updateDividaStatus,
   useIsAdminOrDiretor,
+  useIsAdmin,
+  useIsConselheiro,
+  useAllUsers,
+  updateUserRole,
 } from "@/lib/data";
 import { supabase } from "@/integrations/supabase/client";
 import { generatePrintReport } from "@/lib/printReport";
@@ -35,9 +42,9 @@ export const Route = createFileRoute("/_authenticated/mais")({
   head: () => ({
     meta: [
       { title: "GDACaixa 2027 — Perfil e Ajustes" },
-      { name: "description", content: "Relatórios, controle interno, backup e ajustes do GDACaixa." },
+      { name: "description", content: "Relatórios, controle interno, hierarquia de usuários e backup." },
       { property: "og:title", content: "GDACaixa 2027 — Perfil e Ajustes" },
-      { property: "og:description", content: "Relatórios, controle interno, backup e ajustes." },
+      { property: "og:description", content: "Relatórios, controle interno, hierarquia de usuários e backup." },
     ],
   }),
   component: Mais,
@@ -47,11 +54,17 @@ function Mais() {
   const all = useTransactions();
   const { data: dividas = [] } = useDividas();
   const { data: me } = useMe();
+  const { data: allUsers = [] } = useAllUsers();
   const isAdminOrDiretor = useIsAdminOrDiretor();
+  const isAdmin = useIsAdmin();
+  const isConselheiro = useIsConselheiro();
+  const canManageAnyUser = isAdmin || isAdminOrDiretor || isConselheiro;
+
   const qc = useQueryClient();
   const navigate = useNavigate();
 
   const [dividaDrawerOpen, setDividaDrawerOpen] = useState(false);
+  const [usersDrawerOpen, setUsersDrawerOpen] = useState(false);
   const [backupWebhook, setBackupWebhook] = useState(
     () => localStorage.getItem("gda_backup_webhook") || ""
   );
@@ -106,7 +119,7 @@ function Mais() {
     toast.success("Backup JSON exportado com sucesso!");
   }
 
-  // 3. Sincronização / Backup para Google Apps Script (Google Drive)
+  // 3. Sincronização / Backup para Google Apps Script
   async function triggerGoogleDriveBackup() {
     if (!backupWebhook) {
       const url = prompt(
@@ -141,7 +154,6 @@ function Mais() {
 
   // 4. Imprimir Balancete Geral Oficial para Atas da Igreja
   function handlePrintConsolidado() {
-    const s = summarize(all);
     generatePrintReport({
       module: "consolidado",
       title: "Balancete Financeiro Geral — Comissão da Igreja",
@@ -154,6 +166,34 @@ function Mais() {
         { role: "Secretário(a) da Igreja" },
       ],
     });
+  }
+
+  // Manipular alteração de papel de usuário (com validação hierárquica rigorosa)
+  async function handleChangeRole(targetUserId: string, targetCurrentRole: Role, newRole: Role) {
+    if (targetCurrentRole === newRole) return;
+
+    // Regras de Segurança:
+    // 1. Somente Admin pode promover ou rebaixar alguém para 'admin'
+    if ((newRole === "admin" || targetCurrentRole === "admin") && !isAdmin) {
+      toast.error("Apenas o Administrador Geral pode conceder ou alterar o cargo de Admin.");
+      return;
+    }
+
+    // 2. Diretor pode gerenciar diretores, conselheiros e desbravadores
+    // 3. Conselheiro só pode alterar membros para 'desbravador'
+    if (isConselheiro && !isAdminOrDiretor && newRole !== "desbravador") {
+      toast.error("Conselheiros só podem atribuir o papel de Desbravador.");
+      return;
+    }
+
+    try {
+      await updateUserRole(targetUserId, newRole);
+      toast.success(`Papel alterado para ${ROLE_LABEL[newRole]} com sucesso!`);
+      qc.invalidateQueries({ queryKey: ["all_users"] });
+      qc.invalidateQueries({ queryKey: ["me"] });
+    } catch {
+      toast.error("Falha ao atualizar papel do usuário.");
+    }
   }
 
   // Manipular adição de Dívida / Controle Interno
@@ -196,6 +236,12 @@ function Mais() {
 
   const items = [
     {
+      icon: Users2,
+      label: "Gerenciamento de Usuários & Cargos",
+      sub: `${allUsers.length} membros no clube • Definir Admin, Diretor, Conselheiro`,
+      onClick: () => setUsersDrawerOpen(true),
+    },
+    {
       icon: Printer,
       label: "Imprimir Balancete Geral para Ata",
       sub: "Documento oficial com campos para Diretor, Tesoureiro e Secretário",
@@ -218,17 +264,6 @@ function Mais() {
       label: "Exportar Backup Completo (JSON)",
       sub: "Cópia de segurança offline de todo o banco de dados",
       onClick: exportJson,
-    },
-    {
-      icon: ShieldCheck,
-      label: "Controle de Acesso (RBAC)",
-      sub: me?.roles.map((r) => ROLE_LABEL[r]).join(", ") || "Sem perfil atribuído",
-      onClick: () =>
-        toast.info(
-          `Seu nível de acesso atual: ${
-            me?.roles.map((r) => ROLE_LABEL[r]).join(", ") || "Desbravador"
-          }`
-        ),
     },
     {
       icon: Smartphone,
@@ -350,7 +385,7 @@ function Mais() {
       )}
 
       {/* Lista de Ações e Relatórios */}
-      <h2 className="text-base font-bold text-foreground px-1 pt-2">Relatórios & Ajustes</h2>
+      <h2 className="text-base font-bold text-foreground px-1 pt-2">Administração & Ajustes</h2>
       <ul className="overflow-hidden rounded-3xl bg-surface-container-low border border-outline-variant/20 divide-y divide-outline-variant/20">
         {items.map(({ icon: Icon, label, sub, onClick, danger }) => (
           <li key={label}>
@@ -386,6 +421,59 @@ function Mais() {
         <p className="font-semibold text-foreground/80">GDA Caixa 2027 • v2.0 Mobile-First</p>
         <p>Clube de Desbravadores Guerreiros do Alto • Material Design 3</p>
       </div>
+
+      {/* Drawer para Gestão de Usuários & Cargos (RBAC) */}
+      <Drawer open={usersDrawerOpen} onOpenChange={setUsersDrawerOpen}>
+        <DrawerContent className="rounded-t-3xl bg-surface-container-low max-w-lg mx-auto p-4 max-h-[85vh] flex flex-col">
+          <DrawerHeader>
+            <DrawerTitle className="text-lg font-black text-foreground">Hierarquia & Permissões</DrawerTitle>
+            <p className="text-xs text-muted-foreground">
+              {isAdmin
+                ? "Como Administrador, você pode atribuir qualquer cargo (Admin, Diretor, Conselheiro ou Desbravador)."
+                : isAdminOrDiretor
+                ? "Como Diretor, você pode atribuir os cargos de Diretor, Conselheiro ou Desbravador."
+                : "Como Conselheiro, você pode validar membros como Desbravadores."}
+            </p>
+          </DrawerHeader>
+
+          <div className="overflow-y-auto flex-1 divide-y divide-outline-variant/20 px-2">
+            {allUsers.map((u) => {
+              const currentRole = u.roles[0] || "desbravador";
+              const isSelf = u.id === me?.id;
+              return (
+                <div key={u.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground truncate">
+                      {u.name} {isSelf && "(Você)"}
+                    </p>
+                    <p className="text-xs text-primary font-semibold mt-0.5">
+                      {ROLE_LABEL[currentRole]}
+                    </p>
+                  </div>
+
+                  {canManageAnyUser && !isSelf && (
+                    <select
+                      value={currentRole}
+                      onChange={(e) => handleChangeRole(u.id, currentRole, e.target.value as Role)}
+                      className="text-xs font-bold rounded-xl bg-surface-container-high px-3 py-2 text-foreground border border-outline-variant/40 outline-none"
+                    >
+                      {isAdmin && <option value="admin">Admin</option>}
+                      {(isAdmin || isAdminOrDiretor) && <option value="diretor">Diretor</option>}
+                      {(isAdmin || isAdminOrDiretor) && <option value="conselheiro">Conselheiro</option>}
+                      <option value="desbravador">Desbravador</option>
+                    </select>
+                  )}
+                </div>
+              );
+            })}
+            {!allUsers.length && (
+              <div className="p-8 text-center text-xs text-muted-foreground">
+                Nenhum usuário listado.
+              </div>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       {/* Drawer para Registrar Dívida */}
       <Drawer open={dividaDrawerOpen} onOpenChange={setDividaDrawerOpen}>
