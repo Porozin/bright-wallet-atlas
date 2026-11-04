@@ -13,6 +13,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 const TX_KEY = ["transactions"] as const;
 
+// --- 1. Transações ---
 async function fetchTransactions(): Promise<Transaction[]> {
   const { data, error } = await supabase
     .from("transactions")
@@ -32,7 +33,6 @@ async function fetchTransactions(): Promise<Transaction[]> {
   }));
 }
 
-/** Transactions with live updates; RLS decides which rows each role sees. */
 export function useTransactions(module?: Module) {
   const qc = useQueryClient();
   const { data = [] } = useQuery({ queryKey: TX_KEY, queryFn: fetchTransactions });
@@ -65,6 +65,211 @@ export async function addTransaction(t: Omit<Transaction, "id">) {
   if (error) throw error;
 }
 
+// --- 2. Metas (Clube, Doceria, Vendas, Unidades) ---
+export interface Meta {
+  id: string;
+  modulo: "clube" | "doceria" | "vendas" | "unidade";
+  unidade_nome?: string;
+  descricao: string;
+  valor_alvo: number;
+  status: "pendente" | "aprovada" | "concluida";
+  sugerido_por?: string;
+}
+
+export function useMetas(modulo?: Meta["modulo"]) {
+  const qc = useQueryClient();
+  const { data = [] } = useQuery({
+    queryKey: ["metas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("metas").select("*").order("created_at", { ascending: false });
+      if (error) return [];
+      return (data ?? []).map((m) => ({
+        id: m.id,
+        modulo: m.modulo,
+        unidade_nome: m.unidade_nome ?? undefined,
+        descricao: m.descricao,
+        valor_alvo: Number(m.valor_alvo),
+        status: m.status,
+        sugerido_por: m.sugerido_por ?? undefined,
+      })) as Meta[];
+    },
+  });
+
+  return modulo ? data.filter((m) => m.modulo === modulo) : data;
+}
+
+export async function addMeta(m: Omit<Meta, "id">) {
+  const { error } = await supabase.from("metas").insert({
+    modulo: m.modulo,
+    unidade_nome: m.unidade_nome ?? null,
+    descricao: m.descricao,
+    valor_alvo: m.valor_alvo,
+    status: m.status || "aprovada",
+    sugerido_por: m.sugerido_por ?? null,
+  });
+  if (error) throw error;
+}
+
+// --- 3. Materiais & Estoque (Almoxarifado) ---
+export interface MaterialItem {
+  id: string;
+  modulo: "clube" | "doceria";
+  nome: string;
+  quantidade: number;
+  custo_total: number;
+  unidade_medida?: string;
+}
+
+export function useMateriais(modulo?: "clube" | "doceria") {
+  const { data = [] } = useQuery({
+    queryKey: ["materiais"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("materiais").select("*").order("created_at", { ascending: false });
+      if (error) return [];
+      return (data ?? []).map((m) => ({
+        id: m.id,
+        modulo: m.modulo,
+        nome: m.nome,
+        quantidade: Number(m.quantidade),
+        custo_total: Number(m.custo_total),
+        unidade_medida: m.unidade_medida || "un",
+      })) as MaterialItem[];
+    },
+  });
+  return modulo ? data.filter((m) => m.modulo === modulo) : data;
+}
+
+export async function addMaterial(m: Omit<MaterialItem, "id">) {
+  const { error } = await supabase.from("materiais").insert({
+    modulo: m.modulo,
+    nome: m.nome,
+    quantidade: m.quantidade,
+    custo_total: m.custo_total,
+    unidade_medida: m.unidade_medida || "un",
+  });
+  if (error) throw error;
+}
+
+// --- 4. Produtos e Avarias (Vendas Rápidas) ---
+export interface Produto {
+  id: string;
+  nome: string;
+  preco_venda: number;
+  custo: number;
+  comissao: number;
+}
+
+export function useProdutos() {
+  return useQuery({
+    queryKey: ["produtos"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("produtos").select("*").order("nome");
+      if (error) return [];
+      return (data ?? []).map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        preco_venda: Number(p.preco_venda),
+        custo: Number(p.custo),
+        comissao: Number(p.comissao),
+      })) as Produto[];
+    },
+  });
+}
+
+export async function addProduto(p: Omit<Produto, "id">) {
+  const { error } = await supabase.from("produtos").insert({
+    nome: p.nome,
+    preco_venda: p.preco_venda,
+    custo: p.custo,
+    comissao: p.comissao,
+  });
+  if (error) throw error;
+}
+
+export interface Avaria {
+  id: string;
+  produto_nome: string;
+  quantidade: number;
+  perda_estimada: number;
+  motivo?: string;
+  data: string;
+}
+
+export function useAvarias() {
+  return useQuery({
+    queryKey: ["avarias"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("avarias").select("*").order("data", { ascending: false });
+      if (error) return [];
+      return (data ?? []).map((a) => ({
+        id: a.id,
+        produto_nome: a.produto_nome,
+        quantidade: Number(a.quantidade),
+        perda_estimada: Number(a.perda_estimada),
+        motivo: a.motivo ?? undefined,
+        data: a.data,
+      })) as Avaria[];
+    },
+  });
+}
+
+export async function addAvaria(a: Omit<Avaria, "id">) {
+  const { error } = await supabase.from("avarias").insert({
+    produto_nome: a.produto_nome,
+    quantidade: a.quantidade,
+    perda_estimada: a.perda_estimada,
+    motivo: a.motivo ?? null,
+    data: a.data,
+  });
+  if (error) throw error;
+}
+
+// --- 5. Controle Interno / Dívidas ---
+export interface Divida {
+  id: string;
+  nome: string;
+  valor: number;
+  data: string;
+  status: "pendente" | "pago";
+  obs?: string;
+}
+
+export function useDividas() {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ["dividas"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("dividas").select("*").order("data", { ascending: false });
+      if (error) return [];
+      return (data ?? []).map((d) => ({
+        id: d.id,
+        nome: d.nome,
+        valor: Number(d.valor),
+        data: d.data,
+        status: d.status,
+        obs: d.obs ?? undefined,
+      })) as Divida[];
+    },
+  });
+}
+
+export async function addDivida(d: Omit<Divida, "id">) {
+  const { error } = await supabase.from("dividas").insert({
+    nome: d.nome,
+    valor: d.valor,
+    data: d.data,
+    status: d.status || "pendente",
+    obs: d.obs ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function updateDividaStatus(id: string, status: "pendente" | "pago") {
+  const { error } = await supabase.from("dividas").update({ status }).eq("id", id);
+  if (error) throw error;
+}
+
+// --- Usuário Atual e Permissões ---
 export function useMe() {
   return useQuery({
     queryKey: ["me"],
@@ -90,4 +295,9 @@ export function useMe() {
 export function useCanRecord() {
   const { data } = useMe();
   return !!data?.roles.some((r) => r !== "desbravador");
+}
+
+export function useIsAdminOrDiretor() {
+  const { data } = useMe();
+  return !!data?.roles.some((r) => r === "admin" || r === "diretor");
 }
