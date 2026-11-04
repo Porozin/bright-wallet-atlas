@@ -11,7 +11,7 @@ export interface Transaction {
   category: string;
   description: string;
   date: string; // ISO yyyy-mm-dd
-  seller?: string;
+  seller?: string | undefined;
 }
 
 export const MODULE_LABEL: Record<Module, string> = {

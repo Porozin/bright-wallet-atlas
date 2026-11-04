@@ -15,6 +15,6 @@ describe("finance rules", () => {
   it("commission is 10% of each seller's sales", () => {
     const r = commissionBySeller([t({ seller: "Ana", amount: 300 }), t({ seller: "Ana", amount: 100 }), t({ seller: "Lu", amount: 50 })]);
     expect(r[0]).toEqual({ seller: "Ana", sales: 400, commission: 40 });
-    expect(r[1].commission).toBe(5);
+    expect(r[1]?.commission).toBe(5);
   });
 });
