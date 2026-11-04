@@ -2,9 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/m3/AppShell";
 import { ChipGroup, NewEntryFab, Stat, TransactionList } from "@/components/m3/parts";
-import { summarize, useTransactions } from "@/lib/finance";
+import { summarize } from "@/lib/finance";
+import { useTransactions } from "@/lib/data";
 
-export const Route = createFileRoute("/clube")({
+export const Route = createFileRoute("/_authenticated/clube")({
   head: () => ({
     meta: [
       { title: "GDACaixa · Clube" },

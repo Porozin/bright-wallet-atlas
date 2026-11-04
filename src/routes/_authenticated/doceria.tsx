@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/m3/AppShell";
 import { M3Card, NewEntryFab, Stat, TransactionList } from "@/components/m3/parts";
-import { brl, profitMargin, summarize, useTransactions } from "@/lib/finance";
+import { brl, profitMargin, summarize } from "@/lib/finance";
+import { useTransactions } from "@/lib/data";
 
-export const Route = createFileRoute("/doceria")({
+export const Route = createFileRoute("/_authenticated/doceria")({
   head: () => ({
     meta: [
       { title: "GDACaixa · Doceria" },

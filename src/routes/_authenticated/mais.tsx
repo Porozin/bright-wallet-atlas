@@ -1,10 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ChevronRight, Download, ShieldCheck, Smartphone, UserRound } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChevronRight, Download, LogOut, Smartphone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/m3/AppShell";
-import { MODULE_LABEL, useTransactions } from "@/lib/finance";
+import { MODULE_LABEL } from "@/lib/finance";
+import { ROLE_LABEL, useMe, useTransactions } from "@/lib/data";
+import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/mais")({
+export const Route = createFileRoute("/_authenticated/mais")({
   head: () => ({
     meta: [
       { title: "GDACaixa · Mais opções" },
@@ -18,6 +21,16 @@ export const Route = createFileRoute("/mais")({
 
 function Mais() {
   const all = useTransactions();
+  const { data: me } = useMe();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+
+  async function signOut() {
+    await qc.cancelQueries();
+    qc.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
 
   function exportCsv() {
     const rows = [["Data", "Módulo", "Tipo", "Categoria", "Descrição", "Vendedor", "Valor"], ...all.map((t) => [t.date, MODULE_LABEL[t.module], t.kind, t.category, t.description, t.seller ?? "", t.amount.toFixed(2).replace(".", ",")])];
@@ -30,13 +43,26 @@ function Mais() {
 
   const items = [
     { icon: Download, label: "Exportar planilha (CSV)", sub: "Todas as movimentações", onClick: exportCsv },
-    { icon: UserRound, label: "Usuários e papéis", sub: "Admin, Diretor, Conselheiro, Desbravador", onClick: () => toast("Disponível após ativar o login") },
-    { icon: ShieldCheck, label: "Registro de atividades", sub: "Quem alterou o quê", onClick: () => toast("Disponível após ativar o login") },
+    { icon: UserRound, label: "Usuários e papéis", sub: "Em breve", onClick: () => toast("Gestão de papéis chega na próxima etapa") },
     { icon: Smartphone, label: "Instalar no celular", sub: "Menu do navegador → Adicionar à tela inicial", onClick: () => toast("Use o menu do navegador para adicionar à tela inicial") },
+    { icon: LogOut, label: "Sair", sub: me?.email ?? "", onClick: signOut },
   ];
 
   return (
     <AppShell title="Mais">
+      {me && (
+        <section className="flex items-center gap-4 rounded-lg bg-primary-container p-4 text-on-primary-container">
+          {me.avatar ? (
+            <img src={me.avatar} alt="" className="size-14 rounded-full" referrerPolicy="no-referrer" />
+          ) : (
+            <span className="title-large flex size-14 items-center justify-center rounded-full bg-surface">{me.name.charAt(0)}</span>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="title-medium truncate">{me.name}</p>
+            <p className="label-medium truncate opacity-80">{me.roles.map((r) => ROLE_LABEL[r]).join(", ") || "Sem papel"}</p>
+          </div>
+        </section>
+      )}
       <ul className="overflow-hidden rounded-lg bg-surface-container-low">
         {items.map(({ icon: Icon, label, sub, onClick }) => (
           <li key={label}>

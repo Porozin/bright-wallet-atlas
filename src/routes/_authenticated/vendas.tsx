@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/m3/AppShell";
 import { M3Card, NewEntryFab, TransactionList } from "@/components/m3/parts";
-import { brl, COMMISSION_RATE, commissionBySeller, useTransactions } from "@/lib/finance";
+import { brl, COMMISSION_RATE, commissionBySeller } from "@/lib/finance";
+import { useTransactions } from "@/lib/data";
 
-export const Route = createFileRoute("/vendas")({
+export const Route = createFileRoute("/_authenticated/vendas")({
   head: () => ({
     meta: [
       { title: "GDACaixa · Vendas e eventos" },
