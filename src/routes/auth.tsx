@@ -31,10 +31,15 @@ function AuthPage() {
   async function signIn() {
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const SUPABASE_KEY =
+        import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.SUPABASE_PUBLISHABLE_KEY;
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${window.location.origin}/`,
+          queryParams: SUPABASE_KEY ? { apikey: SUPABASE_KEY } : undefined,
         },
       });
 
