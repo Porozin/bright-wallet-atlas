@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { addTransaction, brl, MODULE_LABEL, type Kind, type Module, type Transaction } from "@/lib/finance";
+import { brl, MODULE_LABEL, type Kind, type Module, type Transaction } from "@/lib/finance";
+import { addTransaction, useCanRecord } from "@/lib/data";
 
 const cardVariants = cva("rounded-lg p-4", {
   variants: {

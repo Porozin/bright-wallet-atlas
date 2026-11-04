@@ -9,46 +9,59 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedClubeRouteImport } from './routes/_authenticated/clube'
 import { Route as AuthenticatedDoceriaRouteImport } from './routes/_authenticated/doceria'
 import { Route as AuthenticatedMaisRouteImport } from './routes/_authenticated/mais'
 import { Route as AuthenticatedVendasRouteImport } from './routes/_authenticated/vendas'
 
-const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
-  id: '/_authenticated/',
-  path: '/',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedClubeRoute = AuthenticatedClubeRouteImport.update({
-  id: '/_authenticated/clube',
+  id: '/clube',
   path: '/clube',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedDoceriaRoute = AuthenticatedDoceriaRouteImport.update({
-  id: '/_authenticated/doceria',
+  id: '/doceria',
   path: '/doceria',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMaisRoute = AuthenticatedMaisRouteImport.update({
-  id: '/_authenticated/mais',
+  id: '/mais',
   path: '/mais',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedVendasRoute = AuthenticatedVendasRouteImport.update({
-  id: '/_authenticated/vendas',
+  id: '/vendas',
   path: '/vendas',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof AuthenticatedIndexRoute
+  '/auth': typeof AuthRoute
   '/clube': typeof AuthenticatedClubeRoute
   '/doceria': typeof AuthenticatedDoceriaRoute
   '/mais': typeof AuthenticatedMaisRoute
   '/vendas': typeof AuthenticatedVendasRoute
-  '/': typeof AuthenticatedIndexRoute
 }
 export interface FileRoutesByTo {
+  '/auth': typeof AuthRoute
   '/clube': typeof AuthenticatedClubeRoute
   '/doceria': typeof AuthenticatedDoceriaRoute
   '/mais': typeof AuthenticatedMaisRoute
@@ -57,6 +70,8 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/auth': typeof AuthRoute
   '/_authenticated/clube': typeof AuthenticatedClubeRoute
   '/_authenticated/doceria': typeof AuthenticatedDoceriaRoute
   '/_authenticated/mais': typeof AuthenticatedMaisRoute
@@ -65,11 +80,13 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/clube' | '/doceria' | '/mais' | '/vendas' | '/'
+  fullPaths: '/' | '/auth' | '/clube' | '/doceria' | '/mais' | '/vendas'
   fileRoutesByTo: FileRoutesByTo
-  to: '/clube' | '/doceria' | '/mais' | '/vendas' | '/'
+  to: '/auth' | '/clube' | '/doceria' | '/mais' | '/vendas' | '/'
   id:
     | '__root__'
+    | '/_authenticated'
+    | '/auth'
     | '/_authenticated/clube'
     | '/_authenticated/doceria'
     | '/_authenticated/mais'
@@ -78,6 +95,65 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
+  AuthRoute: typeof AuthRoute
+}
+
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/clube': {
+      id: '/_authenticated/clube'
+      path: '/clube'
+      fullPath: '/clube'
+      preLoaderRoute: typeof AuthenticatedClubeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/doceria': {
+      id: '/_authenticated/doceria'
+      path: '/doceria'
+      fullPath: '/doceria'
+      preLoaderRoute: typeof AuthenticatedDoceriaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/mais': {
+      id: '/_authenticated/mais'
+      path: '/mais'
+      fullPath: '/mais'
+      preLoaderRoute: typeof AuthenticatedMaisRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/vendas': {
+      id: '/_authenticated/vendas'
+      path: '/vendas'
+      fullPath: '/vendas'
+      preLoaderRoute: typeof AuthenticatedVendasRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+  }
+}
+
+interface AuthenticatedRouteRouteChildren {
   AuthenticatedClubeRoute: typeof AuthenticatedClubeRoute
   AuthenticatedDoceriaRoute: typeof AuthenticatedDoceriaRoute
   AuthenticatedMaisRoute: typeof AuthenticatedMaisRoute
@@ -85,52 +161,20 @@ export interface RootRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/_authenticated/': {
-      id: '/_authenticated/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/clube': {
-      id: '/_authenticated/clube'
-      path: '/clube'
-      fullPath: '/clube'
-      preLoaderRoute: typeof AuthenticatedClubeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/doceria': {
-      id: '/_authenticated/doceria'
-      path: '/doceria'
-      fullPath: '/doceria'
-      preLoaderRoute: typeof AuthenticatedDoceriaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/mais': {
-      id: '/_authenticated/mais'
-      path: '/mais'
-      fullPath: '/mais'
-      preLoaderRoute: typeof AuthenticatedMaisRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/vendas': {
-      id: '/_authenticated/vendas'
-      path: '/vendas'
-      fullPath: '/vendas'
-      preLoaderRoute: typeof AuthenticatedVendasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-  }
-}
-
-const rootRouteChildren: RootRouteChildren = {
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedClubeRoute: AuthenticatedClubeRoute,
   AuthenticatedDoceriaRoute: AuthenticatedDoceriaRoute,
   AuthenticatedMaisRoute: AuthenticatedMaisRoute,
   AuthenticatedVendasRoute: AuthenticatedVendasRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
+const rootRouteChildren: RootRouteChildren = {
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

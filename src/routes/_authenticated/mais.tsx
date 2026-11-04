@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ChevronRight, Download, ShieldCheck, Smartphone, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/m3/AppShell";
-import { MODULE_LABEL, useTransactions } from "@/lib/finance";
+import { MODULE_LABEL } from "@/lib/finance";
+import { useTransactions } from "@/lib/data";
 
 export const Route = createFileRoute("/_authenticated/mais")({
   head: () => ({
