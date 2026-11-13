@@ -1,12 +1,13 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Module, Transaction } from "./finance";
+import { toCents, type Module, type Transaction, type Role as RoleFromFinance } from "./finance";
 
-export type Role = "admin" | "diretor" | "conselheiro" | "desbravador";
+export type Role = "admin" | "diretor" | "tesoureiro" | "conselheiro" | "desbravador";
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   diretor: "Diretor",
+  tesoureiro: "Tesoureiro",
   conselheiro: "Conselheiro",
   desbravador: "Desbravador",
 };
@@ -17,20 +18,33 @@ const TX_KEY = ["transactions"] as const;
 async function fetchTransactions(): Promise<Transaction[]> {
   const { data, error } = await supabase
     .from("transactions")
-    .select("id,module,kind,amount,category,description,date,seller")
+    .select("*")
     .order("date", { ascending: false })
     .limit(1000);
   if (error) throw error;
-  return (data ?? []).map((r) => ({
-    id: r.id,
-    module: r.module as Module,
-    kind: r.kind as Transaction["kind"],
-    amount: Number(r.amount),
-    category: r.category,
-    description: r.description,
-    date: r.date,
-    seller: r.seller ?? undefined,
-  }));
+  return (data ?? []).map((r) => {
+    const rawAmount = Number(r.amount);
+    const amountCents = r.amount_cents ? Number(r.amount_cents) : toCents(rawAmount);
+
+    return {
+      id: r.id,
+      module: (r.module || (r.cash_box_id === "geral" ? "clube" : r.cash_box_id) || "clube") as Module,
+      cash_box_id: r.cash_box_id ?? undefined,
+      kind: r.kind as Transaction["kind"],
+      amount: rawAmount,
+      amount_cents: amountCents,
+      category: r.category || "Geral",
+      description: r.description,
+      date: r.date,
+      seller: r.seller ?? undefined,
+      status: r.status ?? "confirmado",
+      destination_cash_box_id: r.destination_cash_box_id ?? undefined,
+      payment_method: r.payment_method ?? undefined,
+      client_mutation_id: r.client_mutation_id ?? undefined,
+      original_transaction_id: r.original_transaction_id ?? undefined,
+      reverse_reason: r.reverse_reason ?? undefined,
+    };
+  });
 }
 
 export function useTransactions(module?: Module) {
@@ -53,7 +67,10 @@ export function useTransactions(module?: Module) {
 }
 
 export async function addTransaction(t: Omit<Transaction, "id">) {
-  const { error } = await supabase.from("transactions").insert({
+  const clientMutationId = t.client_mutation_id || crypto.randomUUID();
+  const amountCents = t.amount_cents ?? toCents(t.amount);
+
+  const payload: Record<string, any> = {
     module: t.module,
     kind: t.kind,
     amount: t.amount,
@@ -61,7 +78,15 @@ export async function addTransaction(t: Omit<Transaction, "id">) {
     description: t.description,
     date: t.date,
     seller: t.seller ?? null,
-  });
+  };
+
+  // Se os novos campos opcionais existirem no objeto, enviamos com fallback seguro
+  if (t.cash_box_id) payload.cash_box_id = t.cash_box_id;
+  if (t.status) payload.status = t.status;
+  if (t.payment_method) payload.payment_method = t.payment_method;
+  if (t.destination_cash_box_id) payload.destination_cash_box_id = t.destination_cash_box_id;
+
+  const { error } = await supabase.from("transactions").insert(payload);
   if (error) throw error;
 }
 
@@ -294,12 +319,17 @@ export function useMe() {
 
 export function useCanRecord() {
   const { data } = useMe();
-  return !!data?.roles.some((r) => r !== "desbravador");
+  return !!data?.roles.some((r) => r === "admin" || r === "diretor" || r === "tesoureiro");
 }
 
 export function useIsAdminOrDiretor() {
   const { data } = useMe();
-  return !!data?.roles.some((r) => r === "admin" || r === "diretor");
+  return !!data?.roles.some((r) => r === "admin" || r === "diretor" || r === "tesoureiro");
+}
+
+export function useIsFinancialManager() {
+  const { data } = useMe();
+  return !!data?.roles.some((r) => r === "admin" || r === "diretor" || r === "tesoureiro");
 }
 // --- 6. Gestão de Usuários (RBAC) ---
 export interface ClubUser {
