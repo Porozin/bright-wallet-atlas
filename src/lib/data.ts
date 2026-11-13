@@ -43,6 +43,10 @@ async function fetchTransactions(): Promise<Transaction[]> {
       client_mutation_id: r.client_mutation_id ?? undefined,
       original_transaction_id: r.original_transaction_id ?? undefined,
       reverse_reason: r.reverse_reason ?? undefined,
+      requested_by: r.requested_by ?? undefined,
+      approved_by: r.approved_by ?? undefined,
+      approved_at: r.approved_at ?? undefined,
+      rejection_reason: r.rejection_reason ?? undefined,
     };
   });
 }
@@ -69,7 +73,26 @@ export function useTransactions(module?: Module) {
 export async function addTransaction(t: Omit<Transaction, "id">) {
   const clientMutationId = t.client_mutation_id || crypto.randomUUID();
   const amountCents = t.amount_cents ?? toCents(t.amount);
+  const cashBoxId = t.cash_box_id || (t.module === "clube" ? "geral" : t.module);
 
+  // Tentativa primária: RPC oficial segura com idempotência (Fase 1B)
+  const { data: rpcData, error: rpcError } = await supabase.rpc("sp_registrar_transacao_oficial", {
+    p_client_mutation_id: clientMutationId,
+    p_cash_box_id: cashBoxId,
+    p_kind: t.kind,
+    p_amount_cents: amountCents,
+    p_category: t.category,
+    p_description: t.description,
+    p_payment_method: t.payment_method || "dinheiro",
+    p_date: t.date,
+    p_seller: t.seller ?? null,
+  });
+
+  if (!rpcError) {
+    return rpcData;
+  }
+
+  // Fallback para schema legado caso a migration 0004 ainda não tenha sido aplicada
   const payload: Record<string, any> = {
     module: t.module,
     kind: t.kind,
@@ -80,14 +103,80 @@ export async function addTransaction(t: Omit<Transaction, "id">) {
     seller: t.seller ?? null,
   };
 
-  // Se os novos campos opcionais existirem no objeto, enviamos com fallback seguro
   if (t.cash_box_id) payload.cash_box_id = t.cash_box_id;
   if (t.status) payload.status = t.status;
   if (t.payment_method) payload.payment_method = t.payment_method;
   if (t.destination_cash_box_id) payload.destination_cash_box_id = t.destination_cash_box_id;
 
-  const { error } = await supabase.from("transactions").insert(payload);
+  const { error: insertError } = await supabase.from("transactions").insert(payload);
+  if (insertError) throw insertError;
+}
+
+// Helpers para RPCs da Fase 1B
+export async function recordTransfer(params: {
+  originCashBoxId: CashBoxId;
+  destinationCashBoxId: CashBoxId;
+  amountCents: number;
+  description: string;
+  clientMutationId?: string;
+}) {
+  const mutationId = params.clientMutationId || crypto.randomUUID();
+  const { data, error } = await supabase.rpc("sp_registrar_transferencia", {
+    p_client_mutation_id: mutationId,
+    p_origem_id: params.originCashBoxId,
+    p_destino_id: params.destinationCashBoxId,
+    p_amount_cents: params.amountCents,
+    p_description: params.description,
+  });
   if (error) throw error;
+  return data;
+}
+
+export async function requestExpense(params: {
+  cashBoxId: CashBoxId;
+  amountCents: number;
+  category: string;
+  description: string;
+  paymentMethod?: PaymentMethod;
+  clientMutationId?: string;
+}) {
+  const mutationId = params.clientMutationId || crypto.randomUUID();
+  const { data, error } = await supabase.rpc("sp_solicitar_despesa", {
+    p_client_mutation_id: mutationId,
+    p_cash_box_id: params.cashBoxId,
+    p_amount_cents: params.amountCents,
+    p_category: params.category,
+    p_description: params.description,
+    p_payment_method: params.paymentMethod || "dinheiro",
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function approveExpenseRequest(transactionId: string) {
+  const { data, error } = await supabase.rpc("sp_aprovar_solicitacao", {
+    p_transaction_id: transactionId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function rejectExpenseRequest(transactionId: string, reason: string) {
+  const { data, error } = await supabase.rpc("sp_rejeitar_solicitacao", {
+    p_transaction_id: transactionId,
+    p_rejection_reason: reason,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function reverseTransaction(transactionId: string, reason: string) {
+  const { data, error } = await supabase.rpc("sp_estornar_transacao", {
+    p_transaction_id: transactionId,
+    p_reason: reason,
+  });
+  if (error) throw error;
+  return data;
 }
 
 // --- 2. Metas (Clube, Doceria, Vendas, Unidades) ---

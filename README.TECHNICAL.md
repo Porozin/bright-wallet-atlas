@@ -61,11 +61,11 @@ Implementada em `src/lib/finance.test.ts` e validada com 100% de aprovação nos
   - `geral` (Caixa Geral do Clube)
   - `doceria` (Doceria do Clube)
   - `vendas` (Vendas Rápidas / Eventos)
-  - `quarentena_revisao` (Caixa especial inativo para isolar registros legados ambíguos sem perda de dados)
+  - `_quarentena` (Caixa especial inativo para isolar registros legados ambíguos sem perda de dados)
 - Proteção da tabela `transactions` com colunas aditivas:
   - `client_mutation_id text unique`: Chave de idempotência para retenção de reenvios concorrentes ou retentativas de rede.
   - `cash_box_id text references cash_boxes(id)`
-  - `amount_cents bigint not null`
+  - `amount_cents bigint check (amount_cents >= 0 and amount_cents <= 10000000000)`
   - `status text check in ('pendente', 'confirmado', 'estornado', 'corrigido', 'rejeitado')`
   - `payment_method text check in ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'outro')`
   - `destination_cash_box_id text references cash_boxes(id)`
@@ -75,24 +75,31 @@ Implementada em `src/lib/finance.test.ts` e validada com 100% de aprovação nos
   - `approved_at timestamptz`
   - `rejection_reason text`
   - `reverse_reason text`
+  - Atualização do check constraint legado `transactions_kind_check` para suportar `transferencia`.
 
 ### 3.2 Imutabilidade e Auditoria Server-Side
-- A tabela `transaction_audit_logs` possui trigger `trg_audit_immutable` que dispara exceção direta no Postgres em qualquer tentativa de `UPDATE` ou `DELETE`, garantindo histórico append-only inviolável.
-- Exclusão física (`DELETE`) em `transactions` foi totalmente desabilitada para usuários autenticados.
+- A tabela `transaction_audit_logs` possui trigger `trg_prevent_audit_tampering` que dispara exceção direta no Postgres em qualquer tentativa de `UPDATE` ou `DELETE`, garantindo histórico append-only inviolável.
+- Foreign key de `transaction_id` com `ON DELETE RESTRICT` e permissão de `NULL` quando a ação auditar exclusivamente reservas (`reservation_id`).
+- Exclusão física (`DELETE`) em `transactions` e `transaction_audit_logs` foi totalmente desabilitada para usuários autenticados.
 
-### 3.3 RPCs Transacionais (PostgreSQL)
-- `sp_registrar_transacao_oficial`: Valida permissão do gestor, idempotência e grava com `status = 'confirmado'`.
-- `sp_registrar_transferencia`: Aplica lock transacional consultivo (`pg_advisory_xact_lock`), verifica saldo disponível (`saldo - reservas`) e realiza a transferência interna atômica.
-- `sp_aprovar_solicitacao` & `sp_rejeitar_solicitacao`: Permite aprovação com registro do responsável ou rejeição com justificativa obrigatória.
-- `sp_estornar_transacao`: Marca a transação original como `estornado` e gera um lançamento compensatório inverso oficial.
+### 3.3 RPCs Transacionais (PostgreSQL) com SECURITY DEFINER e Idempotência Estrita
+Todas as funções operam com `search_path = public`, `REVOKE EXECUTE FROM public, anon` e `GRANT EXECUTE TO authenticated`:
+- `sp_registrar_transacao_oficial`: Valida permissão do gestor, verifica conflito de parâmetros por `client_mutation_id`, valida saldo disponível em despesas (com lock consultivo), grava com `status = 'confirmado'` e registra auditoria.
+- `sp_registrar_transferencia`: Aplica lock transacional consultivo em ambos os caixas em ordem alfabética determinística (`fn_lock_dois_caixas`), verifica saldo disponível (`saldo - reservas`) e realiza a transferência interna atômica sem impacto consolidado.
+- `sp_solicitar_despesa`: Endpoint para conselheiros; força `status = 'pendente'` e `requested_by = auth.uid()`, bloqueando forja de campos de aprovação.
+- `sp_aprovar_solicitacao`: Valida papel de gestor, confere saldo disponível no momento da aprovação, atualiza para `confirmado` e preenche `approved_by = auth.uid()`.
+- `sp_rejeitar_solicitacao`: Rejeita com justificativa obrigatória, marcando `status = 'rejeitado'`.
+- `sp_estornar_transacao`: Marca a transação original como `estornado`, impede duplo estorno e gera um lançamento compensatório inverso oficial com auditoria vinculada.
+- `sp_criar_reserva`, `sp_liberar_reserva`, `sp_consumir_reserva`: Gestão de saldo comprometido sem movimentação externa entre caixas.
 
 ---
 
-## 4. Arquivos Alterados na Fase 1A & Preparados na Fase 1B
+## 4. Arquivos do Repositório (Fase 1A Concluída & Fase 1B Preparada)
 
 - `src/lib/finance.ts`: Reescrita com núcleo monetário em centavos, neutralidade contábil e consolidação.
 - `src/lib/finance.test.ts`: Bateria completa com os 10 testes de integridade contábil.
-- `src/lib/fase1b.test.ts`: Matriz de testes automatizados para idempotência, concorrência e RPCs.
-- `src/lib/data.ts`: Integração com `amount_cents`, inclusão do cargo `tesoureiro` nas tipagens e unificação das funções de autorização financeira (`useCanRecord`, `useIsFinancialManager`).
-- `drizzle/migrations/0003_fase1b_fundacao_modelagem_seguranca.sql`: Script SQL completo com migração de dados, RLS e RPCs atômicas (Pronto para revisão, **NÃO APLICADO**).
+- `src/lib/fase1b.test.ts`: Matriz de testes automatizados com os 14 cenários de integridade financeira, concorrência, idempotência e RLS.
+- `src/lib/data.ts`: Integração com `amount_cents`, inclusão do cargo `tesoureiro` nas tipagens, wrappers de chamada às RPCs e unificação das funções de autorização financeira (`useCanRecord`, `useIsFinancialManager`).
+- `drizzle/migrations/0003_enum_tesoureiro.sql`: Migration de enum isolada (`ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'tesoureiro'`) para ser commitada antes de 0004.
+- `drizzle/migrations/0004_fase1b_fundacao.sql`: Script SQL completo com migração de dados, tabelas, RLS, locks consultivos e RPCs atômicas (Pronto para revisão, **NÃO APLICADO**).
 

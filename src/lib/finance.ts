@@ -17,7 +17,12 @@ export type Module = "clube" | "doceria" | "vendas";
 export type CashBoxId = "geral" | "doceria" | "vendas";
 
 export type Kind = "receita" | "despesa" | "transferencia";
-export type TransactionStatus = "pendente" | "confirmado" | "estornado" | "corrigido";
+export type TransactionStatus =
+  | "pendente"
+  | "confirmado"
+  | "estornado"
+  | "corrigido"
+  | "rejeitado";
 
 export type PaymentMethod =
   | "dinheiro"
@@ -43,6 +48,10 @@ export interface Transaction {
   client_mutation_id?: string;
   original_transaction_id?: string;
   reverse_reason?: string;
+  requested_by?: string;
+  approved_by?: string;
+  approved_at?: string;
+  rejection_reason?: string;
 }
 
 export interface CashReservation {

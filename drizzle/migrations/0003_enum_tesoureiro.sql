@@ -1,0 +1,21 @@
+-- ==============================================================================
+-- MIGRATION: 0003_enum_tesoureiro.sql
+-- PROJETO: GDACaixa (Clube Guerreiros do Alto)
+-- FASE 1B (PARTE 1 de 2) — Evolução do Catálogo de Enum
+-- STATUS: NÃO APLICADA (Aguardando Aprovação)
+-- ==============================================================================
+--
+-- MOTIVO DA SEPARAÇÃO:
+-- No PostgreSQL, 'ALTER TYPE ... ADD VALUE' não pode ser executado dentro de
+-- uma transação que também USE o novo valor em casts, defaults, comparações
+-- ou chamadas de função que referenciam o enum (erro 55P04).
+--
+-- Esta migration DEVE ser executada e commitada ANTES da migration 0004.
+-- Em Supabase, cada arquivo SQL executado pelo Dashboard roda em sua própria
+-- transação, então basta executar este arquivo primeiro.
+--
+-- IDEMPOTÊNCIA: A instrução 'ADD VALUE IF NOT EXISTS' não falha se o valor
+-- já existir no catálogo. Seguro para re-execução.
+-- ==============================================================================
+
+alter type public.app_role add value if not exists 'tesoureiro';
