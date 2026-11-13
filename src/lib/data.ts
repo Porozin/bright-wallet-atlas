@@ -1,7 +1,15 @@
 import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toCents, type Module, type Transaction, type Role as RoleFromFinance } from "./finance";
+import {
+  toCents,
+  type CashBoxId,
+  type CashReservation,
+  type Module,
+  type PaymentMethod,
+  type Transaction,
+  type Role as RoleFromFinance,
+} from "./finance";
 
 export type Role = "admin" | "diretor" | "tesoureiro" | "conselheiro" | "desbravador";
 export const ROLE_LABEL: Record<Role, string> = {
@@ -70,6 +78,60 @@ export function useTransactions(module?: Module) {
   return module ? data.filter((t) => t.module === module) : data;
 }
 
+export function useBoxTransactions(boxId: CashBoxId) {
+  const all = useTransactions();
+  return all.filter((t) => {
+    const originBox: CashBoxId = t.cash_box_id || (t.module === "clube" ? "geral" : (t.module as CashBoxId));
+    const destBox = t.destination_cash_box_id;
+    return originBox === boxId || destBox === boxId;
+  });
+}
+
+// --- Reservas de Saldo ---
+const RES_KEY = ["reservations"] as const;
+
+async function fetchReservations(): Promise<CashReservation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("transaction_reservations")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) return [];
+    return (data ?? []).map((r: any) => ({
+      id: r.id,
+      cash_box_id: (r.cash_box_id === "clube" ? "geral" : r.cash_box_id) as CashBoxId,
+      title: r.title,
+      description: r.description ?? undefined,
+      amount_cents: Number(r.amount_cents),
+      status: r.status as "ativa" | "liberada" | "consumida",
+      created_by: r.created_by,
+      created_at: r.created_at,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export function useReservations(cashBoxId?: CashBoxId) {
+  const qc = useQueryClient();
+  const { data = [] } = useQuery({ queryKey: RES_KEY, queryFn: fetchReservations });
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`res-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "transaction_reservations" }, () => {
+        qc.invalidateQueries({ queryKey: RES_KEY });
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [qc]);
+
+  return cashBoxId ? data.filter((r) => r.cash_box_id === cashBoxId) : data;
+}
+
 export async function addTransaction(t: Omit<Transaction, "id">) {
   const clientMutationId = t.client_mutation_id || crypto.randomUUID();
   const amountCents = t.amount_cents ?? toCents(t.amount);
@@ -123,8 +185,8 @@ export async function recordTransfer(params: {
   const mutationId = params.clientMutationId || crypto.randomUUID();
   const { data, error } = await supabase.rpc("sp_registrar_transferencia", {
     p_client_mutation_id: mutationId,
-    p_origem_id: params.originCashBoxId,
-    p_destino_id: params.destinationCashBoxId,
+    p_source_box: params.originCashBoxId,
+    p_destination_box: params.destinationCashBoxId,
     p_amount_cents: params.amountCents,
     p_description: params.description,
   });
@@ -153,9 +215,10 @@ export async function requestExpense(params: {
   return data;
 }
 
-export async function approveExpenseRequest(transactionId: string) {
+export async function approveExpenseRequest(transactionId: string, paymentMethod: PaymentMethod = "dinheiro") {
   const { data, error } = await supabase.rpc("sp_aprovar_solicitacao", {
     p_transaction_id: transactionId,
+    p_payment_method: paymentMethod,
   });
   if (error) throw error;
   return data;
@@ -173,7 +236,39 @@ export async function rejectExpenseRequest(transactionId: string, reason: string
 export async function reverseTransaction(transactionId: string, reason: string) {
   const { data, error } = await supabase.rpc("sp_estornar_transacao", {
     p_transaction_id: transactionId,
-    p_reason: reason,
+    p_reverse_reason: reason,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function createReservation(params: {
+  cashBoxId: CashBoxId;
+  title: string;
+  amountCents: number;
+  description?: string;
+}) {
+  const { data, error } = await supabase.rpc("sp_criar_reserva", {
+    p_cash_box_id: params.cashBoxId,
+    p_title: params.title,
+    p_amount_cents: params.amountCents,
+    p_description: params.description ?? null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function releaseReservation(reservationId: string) {
+  const { data, error } = await supabase.rpc("sp_liberar_reserva", {
+    p_reservation_id: reservationId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function consumeReservation(reservationId: string) {
+  const { data, error } = await supabase.rpc("sp_consumir_reserva", {
+    p_reservation_id: reservationId,
   });
   if (error) throw error;
   return data;

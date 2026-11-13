@@ -4,12 +4,24 @@ import { toast } from "sonner";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { brl, MODULE_LABEL, type Kind, type Module, type Transaction } from "@/lib/finance";
+import {
+  brl,
+  MODULE_LABEL,
+  CASH_BOX_LABEL,
+  type CashBoxId,
+  type Kind,
+  type Module,
+  type PaymentMethod,
+  type Transaction,
+} from "@/lib/finance";
 import { addTransaction, useCanRecord } from "@/lib/data";
 
 export { MetricCard } from "./MetricCard";
 export { ResponsiveTransactionList } from "./ResponsiveTransactionList";
 export { BottomNav } from "./BottomNav";
+export { CashBoxHeaderCard } from "./CashBoxHeaderCard";
+export { TransferDrawer } from "./TransferDrawer";
+export { ReservationDrawer } from "./ReservationDrawer";
 
 const cardVariants = cva("rounded-3xl p-5 transition-transform active:scale-[0.99]", {
   variants: {
@@ -89,12 +101,23 @@ export function ChipGroup<T extends string>({ value, options, onChange }: { valu
 
 const field = "h-14 w-full rounded-2xl border border-outline-variant/60 bg-surface px-4 text-sm text-foreground outline-none focus:border-2 focus:border-primary transition-all";
 
-export function NewEntryFab({ module, withSeller }: { module: Module; withSeller?: boolean }) {
+export function NewEntryFab({
+  module,
+  boxId,
+  withSeller,
+}: {
+  module: Module;
+  boxId?: CashBoxId;
+  withSeller?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("receita");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("dinheiro");
   const [saving, setSaving] = useState(false);
   const canRecord = useCanRecord();
   if (!canRecord) return null;
+
+  const targetBoxId: CashBoxId = boxId || (module === "clube" ? "geral" : (module as CashBoxId));
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -108,15 +131,20 @@ export function NewEntryFab({ module, withSeller }: { module: Module; withSeller
     setSaving(true);
     try {
       await addTransaction({
-        module, kind, amount, description,
+        module,
+        cash_box_id: targetBoxId,
+        kind,
+        amount,
+        description,
+        payment_method: paymentMethod,
         category: String(f.get("category") || "Geral"),
         date: String(f.get("date") || new Date().toISOString().slice(0, 10)),
         seller: withSeller ? String(f.get("seller") || "") || undefined : undefined,
       });
       toast.success("Movimentação registrada com sucesso!");
       setOpen(false);
-    } catch {
-      toast.error("Não foi possível salvar. Verifique sua permissão.");
+    } catch (err: any) {
+      toast.error(err?.message || "Não foi possível salvar a movimentação.");
     } finally {
       setSaving(false);
     }
@@ -126,7 +154,7 @@ export function NewEntryFab({ module, withSeller }: { module: Module; withSeller
     <>
       <button
         onClick={() => setOpen(true)}
-        aria-label={`Nova movimentação em ${MODULE_LABEL[module]}`}
+        aria-label={`Nova movimentação em ${CASH_BOX_LABEL[targetBoxId]}`}
         className="flex h-14 items-center gap-2.5 rounded-2xl bg-primary-container px-5 text-on-primary-container shadow-md transition-all active:scale-95 hover:shadow-lg"
       >
         <Plus className="size-6" />
@@ -135,18 +163,75 @@ export function NewEntryFab({ module, withSeller }: { module: Module; withSeller
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerContent className="rounded-t-3xl bg-surface-container-low max-w-lg mx-auto">
           <DrawerHeader>
-            <DrawerTitle className="text-lg font-black tracking-tight text-foreground">Nova movimentação • {MODULE_LABEL[module]}</DrawerTitle>
+            <DrawerTitle className="text-lg font-black tracking-tight text-foreground">
+              Nova movimentação • {CASH_BOX_LABEL[targetBoxId]}
+            </DrawerTitle>
           </DrawerHeader>
           <form onSubmit={submit} className="space-y-4 px-4 pb-8">
-            <ChipGroup value={kind} onChange={setKind} options={[{ value: "receita", label: "Receita" }, { value: "despesa", label: "Despesa" }]} />
-            <input name="description" placeholder="Descrição da movimentação" className={field} maxLength={80} required />
+            <ChipGroup
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: "receita", label: "Receita (+)" },
+                { value: "despesa", label: "Despesa (−)" },
+              ]}
+            />
+            <input
+              name="description"
+              placeholder="Descrição da movimentação"
+              className={field}
+              maxLength={80}
+              required
+            />
             <div className="grid grid-cols-2 gap-3">
-              <input name="amount" inputMode="decimal" placeholder="Valor (R$)" className={field} required />
-              <input name="category" placeholder="Categoria" className={field} maxLength={30} />
+              <input
+                name="amount"
+                inputMode="decimal"
+                placeholder="Valor (R$)"
+                className={field}
+                required
+              />
+              <input
+                name="category"
+                placeholder="Categoria"
+                className={field}
+                maxLength={30}
+              />
             </div>
-            <input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className={field} />
-            {withSeller && <input name="seller" placeholder="Nome do Vendedor(a)" className={field} maxLength={40} />}
-            <button type="submit" disabled={saving} className="text-sm font-bold h-12 w-full rounded-2xl bg-primary text-primary-foreground disabled:opacity-60 transition-transform active:scale-[0.99]">{saving ? "Salvando…" : "Salvar Movimentação"}</button>
+            <div className="grid grid-cols-2 gap-3">
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                className={field}
+              >
+                <option value="dinheiro">Dinheiro</option>
+                <option value="pix">Pix</option>
+                <option value="cartao_debito">Débito</option>
+                <option value="cartao_credito">Crédito</option>
+                <option value="outro">Outro</option>
+              </select>
+              <input
+                name="date"
+                type="date"
+                defaultValue={new Date().toISOString().slice(0, 10)}
+                className={field}
+              />
+            </div>
+            {withSeller && (
+              <input
+                name="seller"
+                placeholder="Nome do Vendedor(a)"
+                className={field}
+                maxLength={40}
+              />
+            )}
+            <button
+              type="submit"
+              disabled={saving}
+              className="text-sm font-bold h-12 w-full rounded-2xl bg-primary text-primary-foreground disabled:opacity-60 transition-transform active:scale-[0.99]"
+            >
+              {saving ? "Salvando…" : "Salvar Movimentação"}
+            </button>
           </form>
         </DrawerContent>
       </Drawer>

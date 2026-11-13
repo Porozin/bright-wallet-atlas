@@ -8,19 +8,20 @@ Todas as alterações notáveis deste projeto serão documentadas neste arquivo.
 - **Migração SQL Estruturada e Segura (`drizzle/migrations/`):**
   - `0003_enum_tesoureiro.sql`: Adiciona o valor `tesoureiro` ao enum `app_role` de forma isolada para transacionalidade segura no PostgreSQL.
   - `0004_fase1b_fundacao.sql`: Modelagem completa dos 3 caixas fixos (`geral`, `doceria`, `vendas`) mais caixa especial inativo `_quarentena`.
+  - `0004_rollback_seguro.sql`: Script de reversão controlada e não-destrutiva (sem `DROP TABLE` e sem concessões `allow_all_transactions`).
   - Tabela `transaction_reservations` com controle de estados (`ativa`, `liberada`, `consumida`) e auditoria.
   - Tabela de auditoria append-only `transaction_audit_logs` com trigger de bloqueio total de `UPDATE` e `DELETE` e integridade referencial `ON DELETE RESTRICT`.
-  - RPCs atômicas server-side protegidas (`SECURITY DEFINER`, search_path fixo, `REVOKE` de public/anon):
-    - `sp_registrar_transacao_oficial`: Idempotência estrita com detecção de divergência de parâmetros, advisory locks e cálculo de saldo disponível.
+  - RPCs atômicas server-side protegidas (`SECURITY DEFINER`, `SET search_path = ''`, referências totalmente qualificadas por schema e `REVOKE` de public/anon):
+    - `sp_registrar_transacao_oficial`: Idempotência estrita com detecção de divergência de parâmetros, advisory locks e validação de saldo disponível para despesas.
     - `sp_registrar_transferencia`: Atomicidade total com locking ordenado em ambos os caixas e neutralidade contábil.
-    - `sp_solicitar_despesa`: Solicitação preliminar de conselheiro com status forçado para `pendente`.
-    - `sp_aprovar_solicitacao` e `sp_rejeitar_solicitacao`: Governança de aprovação com registro do gestor e motivo obrigatório em rejeições.
-    - `sp_estornar_transacao`: Estorno com transação compensatória oficial e trilha imutável.
+    - `sp_solicitar_despesa`: Solicitação preliminar de conselheiro com status forçado para `pendente` e suporte a idempotência.
+    - `sp_aprovar_solicitacao` e `sp_rejeitar_solicitacao`: Governança de aprovação com bloqueio de auto-aprovação, validação de saldo e motivo obrigatório em rejeições.
+    - `sp_estornar_transacao`: Estorno com transação compensatória oficial, validação de saldo no caixa devedor e trilha imutável.
     - `sp_criar_reserva`, `sp_liberar_reserva`, `sp_consumir_reserva`: Bloqueio de saldo sem transferência inter-caixas.
 - **Suite de Testes da Fase 1B (`src/lib/fase1b.test.ts`):**
   - Implementação dos 14 cenários de integridade financeira, concorrência, RLS, idempotência e bloqueio de adulterações.
 - **Integração no Cliente (`src/lib/data.ts`):**
-  - Implementação dos wrappers tipados para chamada de todas as RPCs com fallback seguro para o schema legado.
+  - Implementação e harmonização dos wrappers tipados para chamada de todas as RPCs (transferências, despesas, aprovações, estornos e reservas) com parâmetros exatos e fallback seguro para o schema legado.
 
 #### Modificado
 - `src/lib/finance.ts`: Adicionado status `rejeitado` e campos de solicitação/aprovação na interface `Transaction`.

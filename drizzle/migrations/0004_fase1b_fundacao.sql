@@ -166,7 +166,7 @@ alter table public.transaction_audit_logs enable row level security;
 
 -- Trigger: impede UPDATE e DELETE por qualquer role
 create or replace function public.trg_prevent_audit_tampering()
-returns trigger language plpgsql security definer set search_path = public as $$
+returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   raise exception 'Registros de auditoria são imutáveis. UPDATE e DELETE não são permitidos.';
 end;
@@ -186,7 +186,7 @@ create trigger trg_audit_no_update
 create or replace function public.has_role(_user_id uuid, _role public.app_role)
 returns boolean
 language sql stable security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1 from public.user_roles
@@ -201,7 +201,7 @@ grant execute on function public.has_role(uuid, public.app_role) to authenticate
 create or replace function public.is_financial_manager(_user_id uuid)
 returns boolean
 language sql stable security definer
-set search_path = public
+set search_path = ''
 as $$
   select exists (
     select 1 from public.user_roles
@@ -216,7 +216,7 @@ grant execute on function public.is_financial_manager(uuid) to authenticated, se
 create or replace function public.fn_saldo_disponivel(p_cash_box_id text)
 returns bigint
 language sql stable security definer
-set search_path = public
+set search_path = ''
 as $$
   select coalesce((
     select sum(
@@ -246,15 +246,15 @@ grant execute on function public.fn_saldo_disponivel(text) to service_role;
 -- B4. Lock determinístico para um caixa (ordem estável para evitar deadlocks)
 -- Usado por TODAS as RPCs que alteram saldo de um caixa.
 create or replace function public.fn_lock_caixa(p_box_id text)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = '' as $$
 begin
-  perform pg_advisory_xact_lock(hashtext('gdacaixa_box_' || p_box_id));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtext('gdacaixa_box_' || p_box_id));
 end;
 $$;
 
 -- Lock de dois caixas em ordem determinística (para transferências)
 create or replace function public.fn_lock_dois_caixas(p_a text, p_b text)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = '' as $$
 begin
   if p_a < p_b then
     perform public.fn_lock_caixa(p_a);
@@ -346,7 +346,7 @@ create or replace function public.sp_registrar_transacao_oficial(
 )
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -416,6 +416,13 @@ begin
   -- 5. Lock do caixa afetado
   perform public.fn_lock_caixa(p_cash_box_id);
 
+  -- Validação de saldo disponível para despesas
+  if p_kind = 'despesa' then
+    if public.fn_saldo_disponivel(p_cash_box_id) < p_amount_cents then
+      raise exception 'Saldo disponível insuficiente no caixa "%" para realizar a despesa.', p_cash_box_id;
+    end if;
+  end if;
+
   -- 6. Mapeamento legado
   v_module := case when p_cash_box_id = 'geral' then 'clube' else p_cash_box_id end;
 
@@ -468,7 +475,7 @@ create or replace function public.sp_registrar_transferencia(
 )
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -587,7 +594,7 @@ create or replace function public.sp_solicitar_despesa(
 )
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -678,7 +685,7 @@ create or replace function public.sp_aprovar_solicitacao(
 )
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -748,7 +755,7 @@ create or replace function public.sp_rejeitar_solicitacao(
 )
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -809,7 +816,7 @@ create or replace function public.sp_estornar_transacao(
 )
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -936,7 +943,7 @@ create or replace function public.sp_criar_reserva(
 )
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -1003,7 +1010,7 @@ grant execute on function public.sp_criar_reserva(text,text,bigint,text) to auth
 create or replace function public.sp_liberar_reserva(p_reservation_id uuid)
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -1057,7 +1064,7 @@ grant execute on function public.sp_liberar_reserva(uuid) to authenticated;
 create or replace function public.sp_consumir_reserva(p_reservation_id uuid)
 returns uuid
 language plpgsql security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_uid uuid := auth.uid();

@@ -83,13 +83,13 @@ Implementada em `src/lib/finance.test.ts` e validada com 100% de aprovação nos
 - Exclusão física (`DELETE`) em `transactions` e `transaction_audit_logs` foi totalmente desabilitada para usuários autenticados.
 
 ### 3.3 RPCs Transacionais (PostgreSQL) com SECURITY DEFINER e Idempotência Estrita
-Todas as funções operam com `search_path = public`, `REVOKE EXECUTE FROM public, anon` e `GRANT EXECUTE TO authenticated`:
+Todas as funções operam com `search_path = ''` (vazio, prevenindo sequestro de caminho de busca), referências totalmente qualificadas por schema (`public.*`, `auth.*`, `pg_catalog.*`), `REVOKE EXECUTE FROM public, anon` e `GRANT EXECUTE TO authenticated`:
 - `sp_registrar_transacao_oficial`: Valida permissão do gestor, verifica conflito de parâmetros por `client_mutation_id`, valida saldo disponível em despesas (com lock consultivo), grava com `status = 'confirmado'` e registra auditoria.
 - `sp_registrar_transferencia`: Aplica lock transacional consultivo em ambos os caixas em ordem alfabética determinística (`fn_lock_dois_caixas`), verifica saldo disponível (`saldo - reservas`) e realiza a transferência interna atômica sem impacto consolidado.
 - `sp_solicitar_despesa`: Endpoint para conselheiros; força `status = 'pendente'` e `requested_by = auth.uid()`, bloqueando forja de campos de aprovação.
-- `sp_aprovar_solicitacao`: Valida papel de gestor, confere saldo disponível no momento da aprovação, atualiza para `confirmado` e preenche `approved_by = auth.uid()`.
+- `sp_aprovar_solicitacao`: Valida papel de gestor, impede auto-aprovação, confere saldo disponível no momento da aprovação, atualiza para `confirmado` e preenche `approved_by = auth.uid()`.
 - `sp_rejeitar_solicitacao`: Rejeita com justificativa obrigatória, marcando `status = 'rejeitado'`.
-- `sp_estornar_transacao`: Marca a transação original como `estornado`, impede duplo estorno e gera um lançamento compensatório inverso oficial com auditoria vinculada.
+- `sp_estornar_transacao`: Marca a transação original como `estornado`, valida saldo para débitos reversos, impede duplo estorno e gera um lançamento compensatório inverso oficial com auditoria vinculada.
 - `sp_criar_reserva`, `sp_liberar_reserva`, `sp_consumir_reserva`: Gestão de saldo comprometido sem movimentação externa entre caixas.
 
 ---
@@ -99,7 +99,8 @@ Todas as funções operam com `search_path = public`, `REVOKE EXECUTE FROM publi
 - `src/lib/finance.ts`: Reescrita com núcleo monetário em centavos, neutralidade contábil e consolidação.
 - `src/lib/finance.test.ts`: Bateria completa com os 10 testes de integridade contábil.
 - `src/lib/fase1b.test.ts`: Matriz de testes automatizados com os 14 cenários de integridade financeira, concorrência, idempotência e RLS.
-- `src/lib/data.ts`: Integração com `amount_cents`, inclusão do cargo `tesoureiro` nas tipagens, wrappers de chamada às RPCs e unificação das funções de autorização financeira (`useCanRecord`, `useIsFinancialManager`).
+- `src/lib/data.ts`: Integração com `amount_cents`, inclusão do cargo `tesoureiro` nas tipagens, wrappers consistentes de chamada às RPCs (`recordTransfer`, `requestExpense`, `approveExpenseRequest`, `rejectExpenseRequest`, `reverseTransaction`, `createReservation`, `releaseReservation`, `consumeReservation`) e unificação das funções de autorização financeira (`useCanRecord`, `useIsFinancialManager`).
 - `drizzle/migrations/0003_enum_tesoureiro.sql`: Migration de enum isolada (`ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'tesoureiro'`) para ser commitada antes de 0004.
 - `drizzle/migrations/0004_fase1b_fundacao.sql`: Script SQL completo com migração de dados, tabelas, RLS, locks consultivos e RPCs atômicas (Pronto para revisão, **NÃO APLICADO**).
+- `drizzle/migrations/0004_rollback_seguro.sql`: Script de reversão controlada, não-destrutiva (sem `DROP TABLE` e sem permissões irrestritas), preservando integridade histórica de dados e logs de auditoria.
 

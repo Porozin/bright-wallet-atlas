@@ -58,8 +58,11 @@ export interface CashReservation {
   id: string;
   cash_box_id: CashBoxId;
   title: string;
+  description?: string;
   amount_cents: number;
   status: "ativa" | "liberada" | "consumida";
+  created_by?: string;
+  created_at?: string;
 }
 
 export const MODULE_LABEL: Record<Module, string> = {
