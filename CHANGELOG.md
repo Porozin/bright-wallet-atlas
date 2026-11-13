@@ -25,3 +25,4 @@ Todas as alterações notáveis deste projeto serão documentadas neste arquivo.
 #### Corrigido
 - Eliminado risco de imprecisão de ponto flutuante em operações monetárias.
 - Eliminado risco de transferências inflarem artificialmente o resultado consolidado do clube.
+

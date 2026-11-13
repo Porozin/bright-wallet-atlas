@@ -153,3 +153,4 @@ create policy "Gestores administram reservas" on public.transaction_reservations
 create policy "Gestores consultam logs de auditoria" on public.transaction_audit_logs
   for select to authenticated
   using (public.is_financial_manager(auth.uid()));
+

@@ -59,3 +59,4 @@ Implementada em `src/lib/finance.test.ts` e validada com 100% de aprovação nos
 - `src/lib/finance.ts`: Reescrita com núcleo monetário em centavos, neutralidade contábil e consolidação.
 - `src/lib/finance.test.ts`: Bateria completa com os 10 testes de integridade contábil.
 - `src/lib/data.ts`: Integração com `amount_cents`, inclusão do cargo `tesoureiro` nas tipagens e unificação das funções de autorização financeira (`useCanRecord`, `useIsFinancialManager`).
+
