@@ -54,9 +54,45 @@ Implementada em `src/lib/finance.test.ts` e validada com 100% de aprovação nos
 
 ---
 
-## 3. Arquivos Alterados na Fase 1A
+## 3. Arquitetura Proposta para a Fase 1B (Revisada e Pronta para Aplicação)
+
+### 3.1 Modelo de Dados e Domínio dos 3 Caixas Fixos
+- Criação da tabela `cash_boxes` contendo os três caixas obrigatórios:
+  - `geral` (Caixa Geral do Clube)
+  - `doceria` (Doceria do Clube)
+  - `vendas` (Vendas Rápidas / Eventos)
+  - `quarentena_revisao` (Caixa especial inativo para isolar registros legados ambíguos sem perda de dados)
+- Proteção da tabela `transactions` com colunas aditivas:
+  - `client_mutation_id text unique`: Chave de idempotência para retenção de reenvios concorrentes ou retentativas de rede.
+  - `cash_box_id text references cash_boxes(id)`
+  - `amount_cents bigint not null`
+  - `status text check in ('pendente', 'confirmado', 'estornado', 'corrigido', 'rejeitado')`
+  - `payment_method text check in ('dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'outro')`
+  - `destination_cash_box_id text references cash_boxes(id)`
+  - `original_transaction_id uuid references transactions(id)`
+  - `requested_by uuid references auth.users(id)`
+  - `approved_by uuid references auth.users(id)`
+  - `approved_at timestamptz`
+  - `rejection_reason text`
+  - `reverse_reason text`
+
+### 3.2 Imutabilidade e Auditoria Server-Side
+- A tabela `transaction_audit_logs` possui trigger `trg_audit_immutable` que dispara exceção direta no Postgres em qualquer tentativa de `UPDATE` ou `DELETE`, garantindo histórico append-only inviolável.
+- Exclusão física (`DELETE`) em `transactions` foi totalmente desabilitada para usuários autenticados.
+
+### 3.3 RPCs Transacionais (PostgreSQL)
+- `sp_registrar_transacao_oficial`: Valida permissão do gestor, idempotência e grava com `status = 'confirmado'`.
+- `sp_registrar_transferencia`: Aplica lock transacional consultivo (`pg_advisory_xact_lock`), verifica saldo disponível (`saldo - reservas`) e realiza a transferência interna atômica.
+- `sp_aprovar_solicitacao` & `sp_rejeitar_solicitacao`: Permite aprovação com registro do responsável ou rejeição com justificativa obrigatória.
+- `sp_estornar_transacao`: Marca a transação original como `estornado` e gera um lançamento compensatório inverso oficial.
+
+---
+
+## 4. Arquivos Alterados na Fase 1A & Preparados na Fase 1B
 
 - `src/lib/finance.ts`: Reescrita com núcleo monetário em centavos, neutralidade contábil e consolidação.
 - `src/lib/finance.test.ts`: Bateria completa com os 10 testes de integridade contábil.
+- `src/lib/fase1b.test.ts`: Matriz de testes automatizados para idempotência, concorrência e RPCs.
 - `src/lib/data.ts`: Integração com `amount_cents`, inclusão do cargo `tesoureiro` nas tipagens e unificação das funções de autorização financeira (`useCanRecord`, `useIsFinancialManager`).
+- `drizzle/migrations/0003_fase1b_fundacao_modelagem_seguranca.sql`: Script SQL completo com migração de dados, RLS e RPCs atômicas (Pronto para revisão, **NÃO APLICADO**).
 
