@@ -577,11 +577,13 @@ grant execute on function public.sp_registrar_transferencia(text,text,text,bigin
 
 -- D3. Solicitação Preliminar de Conselheiro (via RPC, não via INSERT direto)
 create or replace function public.sp_solicitar_despesa(
-  p_cash_box_id   text,
-  p_amount_cents   bigint,
-  p_category       text,
-  p_description    text,
-  p_date           date default current_date
+  p_cash_box_id         text,
+  p_amount_cents        bigint,
+  p_category            text,
+  p_description         text,
+  p_date                date default current_date,
+  p_payment_method      text default 'dinheiro',
+  p_client_mutation_id  text default null
 )
 returns uuid
 language plpgsql security definer
@@ -596,7 +598,6 @@ begin
   end if;
 
   -- Conselheiros, diretores, tesoureiros e admins podem submeter solicitações
-  -- (Gestores podem preferir submeter como pendente ao invés de confirmar diretamente)
   if not (public.has_role(v_uid, 'conselheiro')
        or public.is_financial_manager(v_uid)) then
     raise exception 'Acesso negado: apenas conselheiros e gestores podem submeter solicitações.';
@@ -618,21 +619,43 @@ begin
     raise exception 'Descrição é obrigatória.';
   end if;
 
+  if p_payment_method not in ('dinheiro','pix','cartao_debito','cartao_credito','outro') then
+    raise exception 'Forma de pagamento inválida.';
+  end if;
+
+  -- Idempotência: se client_mutation_id foi fornecido e já existe
+  if p_client_mutation_id is not null and trim(p_client_mutation_id) <> '' then
+    select id into v_new_id
+      from public.transactions
+      where client_mutation_id = trim(p_client_mutation_id);
+    if found then
+      return v_new_id;
+    end if;
+  end if;
+
   insert into public.transactions (
-    cash_box_id, module, kind,
+    client_mutation_id, cash_box_id, module, kind,
     amount_cents, amount, category, description,
     payment_method, date,
     status, requested_by, created_by
   ) values (
+    nullif(trim(p_client_mutation_id), ''),
     p_cash_box_id,
     case when p_cash_box_id = 'geral' then 'clube' else p_cash_box_id end,
     'despesa',
     p_amount_cents, (p_amount_cents / 100.0)::numeric(12,2),
     coalesce(nullif(trim(p_category),''), 'Geral'), trim(p_description),
-    'dinheiro', coalesce(p_date, current_date),
+    p_payment_method, coalesce(p_date, current_date),
     'pendente', v_uid, v_uid
   )
+  on conflict (client_mutation_id) where client_mutation_id is not null
+  do nothing
   returning id into v_new_id;
+
+  if v_new_id is null and p_client_mutation_id is not null then
+    select id into v_new_id from public.transactions where client_mutation_id = trim(p_client_mutation_id);
+    return v_new_id;
+  end if;
 
   insert into public.transaction_audit_logs (transaction_id, action, new_data, changed_by)
   values (v_new_id, 'SOLICITACAO',
@@ -644,8 +667,8 @@ begin
 end;
 $$;
 
-revoke execute on function public.sp_solicitar_despesa(text,bigint,text,text,date) from public, anon;
-grant execute on function public.sp_solicitar_despesa(text,bigint,text,text,date) to authenticated;
+revoke execute on function public.sp_solicitar_despesa(text,bigint,text,text,date,text,text) from public, anon;
+grant execute on function public.sp_solicitar_despesa(text,bigint,text,text,date,text,text) to authenticated;
 
 
 -- D4. Aprovação de Solicitação
@@ -690,6 +713,11 @@ begin
 
   -- Lock do caixa afetado antes de confirmar
   perform public.fn_lock_caixa(v_old.cash_box_id);
+
+  -- Valida saldo disponível no caixa no momento da aprovação
+  if public.fn_saldo_disponivel(v_old.cash_box_id) < v_old.amount_cents then
+    raise exception 'Saldo disponível insuficiente no caixa "%" para aprovar a despesa.', v_old.cash_box_id;
+  end if;
 
   update public.transactions
     set status = 'confirmado',
@@ -847,6 +875,17 @@ begin
   else
     v_comp_box  := v_orig.cash_box_id;
     v_comp_dest := null;
+  end if;
+
+  -- Validação de saldo disponível antes do débito compensatório
+  if v_comp_kind = 'despesa' then
+    if public.fn_saldo_disponivel(v_comp_box) < v_orig.amount_cents then
+      raise exception 'Saldo disponível insuficiente no caixa "%" para compensar o estorno da receita.', v_comp_box;
+    end if;
+  elsif v_orig.kind = 'transferencia' then
+    if public.fn_saldo_disponivel(v_comp_box) < v_orig.amount_cents then
+      raise exception 'Saldo disponível insuficiente no caixa de destino "%" para reverter a transferência.', v_comp_box;
+    end if;
   end if;
 
   insert into public.transactions (

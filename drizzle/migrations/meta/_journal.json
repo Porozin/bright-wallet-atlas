@@ -8,6 +8,34 @@
       "when": 1793750561720,
       "tag": "0000_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793750561721,
+      "tag": "0001_gdacaixa_features",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793750561722,
+      "tag": "0002_rbac_hierarchy",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793750561723,
+      "tag": "0003_enum_tesoureiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793750561724,
+      "tag": "0004_fase1b_fundacao",
+      "breakpoints": true
     }
   ]
 }
